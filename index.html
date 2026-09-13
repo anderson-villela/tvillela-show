@@ -134,6 +134,51 @@
   .tv-badge-label { font-size: 11.5px; color: var(--text-muted); line-height: 1.3; }
 
   .tv-static-poster { border-radius: 8px; overflow: hidden; background: var(--surface); }
+
+  .tv-status-note { margin-top: 16px; padding: 12px 16px; border-radius: 9px; font-size: 13.5px; line-height: 1.5; }
+  .tv-status-ended { background: rgba(242,193,78,.12); border: 1px solid rgba(242,193,78,.35); color: var(--accent-2); }
+  .tv-status-returning { background: rgba(255,75,62,.10); border: 1px solid rgba(255,75,62,.3); color: #ff9a90; }
+
+  @media (max-width: 860px) {
+    .tv-main { padding: 16px; }
+    .tv-habits-grid { grid-template-columns: 1fr; gap: 20px; }
+    .tv-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 14px; }
+  }
+
+  @media (max-width: 640px) {
+    .tv-header { flex-wrap: wrap; gap: 10px; padding: 10px 14px; }
+    .tv-brand { flex: 1 1 auto; }
+    .tv-icon-btn { margin-left: 0; }
+    .tv-tabs { order: 3; width: 100%; overflow-x: auto; gap: 2px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .tv-tabs::-webkit-scrollbar { display: none; }
+    .tv-tab { padding: 7px 11px; font-size: 13px; white-space: nowrap; flex-shrink: 0; }
+    .tv-main { padding: 12px; }
+    .tv-settings { padding: 14px; }
+    .tv-settings-row { flex-direction: column; align-items: stretch; }
+    .tv-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; }
+    .tv-detail-head { flex-direction: column; }
+    .tv-detail-poster { width: 140px; align-self: flex-start; }
+    .tv-detail-title { font-size: 21px; }
+    .tv-season-row { flex-direction: column; align-items: stretch; }
+    .tv-select-wrap { width: 100%; }
+    .tv-select { width: 100%; }
+    .tv-episode-still { width: 64px; height: 36px; }
+    .tv-episode-title { font-size: 13px; }
+    .tv-listing-row { gap: 10px; padding: 8px; }
+    .tv-listing-poster { width: 40px; height: 58px; }
+    .tv-tvtime-value { font-size: 30px; }
+    .tv-tvtime-value span { font-size: 13px; margin-right: 6px; }
+    .tv-stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .tv-bar-row { grid-template-columns: 84px 1fr 22px; gap: 6px; }
+    .tv-bar-label { font-size: 11.5px; }
+    .tv-badges-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 380px) {
+    .tv-grid { grid-template-columns: repeat(2, 1fr); }
+    .tv-stat-grid { grid-template-columns: 1fr 1fr; }
+    .tv-wordmark { font-size: 16px; }
+  }
 </style>
 </head>
 <body>
@@ -143,6 +188,7 @@
 const TMDB = "https://api.themoviedb.org/3";
 const IMG = "https://image.tmdb.org/t/p/w342";
 const STILL = "https://image.tmdb.org/t/p/w300";
+const TODAY_STR = new Date().toISOString().slice(0, 10);
 
 const state = {
   apiKey: localStorage.getItem("tvillela_apiKey") || "",
@@ -641,16 +687,20 @@ function renderMain() {
     if (state.emBreve.length === 0) {
       return `<main class="tv-main">${errorHtml}<div class="tv-empty">Nenhuma novidade por enquanto. Suas séries seguem nas temporadas que você já conhece.</div></main>`;
     }
-    const rows = state.emBreve.map((item) => `
+    const rows = state.emBreve.map((item) => {
+      const notYetAired = item.airDate && item.airDate > TODAY_STR;
+      const tag = notYetAired ? "Temporada anunciada" : "Nova temporada disponível";
+      return `
       <li class="tv-listing-row" data-embreve="${item.id}" data-newseason="${item.newSeasonNum}">
         ${item.poster_path ? `<img class="tv-listing-poster" src="${IMG}${item.poster_path}" alt="">` : `<div class="tv-listing-poster tv-poster-fallback"></div>`}
         <div class="tv-listing-info">
           <div class="tv-listing-title">${esc(item.name)}</div>
           <div class="tv-listing-meta">
-            ${esc(item.seasonName)}${item.episodeCount ? ` · ${item.episodeCount} episódios` : ""}${item.airDate ? ` · estreia ${item.airDate}` : ""}
+            ${tag} · ${esc(item.seasonName)}${item.episodeCount ? ` · ${item.episodeCount} episódios` : ""}${item.airDate ? ` · estreia ${item.airDate}` : " · data ainda não anunciada"}
           </div>
         </div>
-      </li>`).join("");
+      </li>`;
+    }).join("");
     return `<main class="tv-main">${errorHtml}<ul class="tv-listing">${rows}</ul></main>`;
   }
 
@@ -677,6 +727,20 @@ function renderMain() {
   return `<main class="tv-main">${errorHtml}${searchRow}${body}</main>`;
 }
 
+function seriesStatusNote(d) {
+  const status = d.status || "";
+  const ended = status === "Ended" || status === "Canceled";
+  if (ended) {
+    const label = status === "Canceled" ? "cancelada" : "encerrada";
+    return `<div class="tv-status-note tv-status-ended">🏁 Série ${label} — você assistiu tudo que existe até agora.</div>`;
+  }
+  const next = d.next_episode_to_air;
+  if (next && next.air_date) {
+    return `<div class="tv-status-note tv-status-returning">📡 Série segue ativa — próximo episódio previsto para ${next.air_date}.</div>`;
+  }
+  return `<div class="tv-status-note tv-status-returning">📡 Série segue ativa, com novas temporadas possíveis — ainda sem data de estreia anunciada.</div>`;
+}
+
 function renderDetail() {
   const d = state.detail;
   const seasons = (d.seasons || []).filter((s) => s.season_number > 0 || d.seasons.length === 1);
@@ -684,6 +748,12 @@ function renderDetail() {
   const eps = state.episodes || [];
   const allWatched = eps.length > 0 && eps.every((e) => watchedMap[e.episode_number]);
   const errorHtml = state.error ? `<div class="tv-error">${esc(state.error)}</div>` : "";
+
+  const releasedSeasons = seasons.filter((s) => s.air_date && s.air_date <= TODAY_STR);
+  const latestReleasedSeasonNum = releasedSeasons.length
+    ? Math.max(...releasedSeasons.map((s) => s.season_number))
+    : Math.max(0, ...seasons.map((s) => s.season_number));
+  const showStatusNote = allWatched && state.season === latestReleasedSeasonNum;
 
   const episodeItems = eps.map((ep) => {
     const watched = !!watchedMap[ep.episode_number];
@@ -724,6 +794,7 @@ function renderDetail() {
       ${eps.length > 0 ? `<button class="tv-btn tv-btn-ghost tv-btn-sm" id="markSeasonBtn">${allWatched ? "Desmarcar temporada assistida" : "Marcar temporada como assistida"}</button>` : ""}
     </div>
     ${state.loading && !state.episodes ? `<div class="tv-empty">Carregando episódios…</div>` : `<ul class="tv-episode-list">${episodeItems}</ul>`}
+    ${showStatusNote ? seriesStatusNote(d) : ""}
   </main>`;
 }
 
