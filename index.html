@@ -281,6 +281,25 @@ async function toggleEpisode(seriesId, seasonNumber, episodeNumber) {
   render();
 }
 
+async function completeSeries(seriesId) {
+  const confirmed = confirm("Marcar TODOS os episódios de TODAS as temporadas desta série como assistidos?");
+  if (!confirmed) return;
+  const d = state.detail;
+  if (!d) return;
+  const w = state.library.watching.find((s) => s.id === seriesId);
+  const seasonsWatched = state.library.watched[seriesId] || (state.library.watched[seriesId] = {});
+  const now = Date.now();
+  (d.seasons || []).forEach((season) => {
+    if (season.season_number === 0) return;
+    const eps = seasonsWatched[season.season_number] || (seasonsWatched[season.season_number] = {});
+    for (let n = 1; n <= (season.episode_count || 0); n++) {
+      eps[n] = { runtime: (w && w.avgRuntime) || 40, watchedAt: now };
+    }
+  });
+  saveLibrary();
+  render();
+}
+
 async function markSeasonWatched(seriesId, seasonNumber, allEpisodeNumbers) {
   const seasons = state.library.watched[seriesId] || (state.library.watched[seriesId] = {});
   const currentlyAll = allEpisodeNumbers.every((n) => seasons[seasonNumber] && seasons[seasonNumber][n]);
@@ -688,9 +707,12 @@ function renderDetail() {
       <div>
         <h1 class="tv-detail-title">${esc(d.name)}</h1>
         <p class="tv-detail-overview">${esc(d.overview) || "Sem sinopse disponível."}</p>
-        <button class="tv-btn ${isWatching(d.id) ? "tv-btn-ghost" : "tv-btn-primary"}" id="toggleWatchBtn">
-          ${isWatching(d.id) ? "Remover da Minha Lista" : "Adicionar à Minha Lista"}
-        </button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="tv-btn ${isWatching(d.id) ? "tv-btn-ghost" : "tv-btn-primary"}" id="toggleWatchBtn">
+            ${isWatching(d.id) ? "Remover da Minha Lista" : "Adicionar à Minha Lista"}
+          </button>
+          ${isWatching(d.id) ? `<button class="tv-btn tv-btn-ghost" id="completeSeriesBtn">Concluir série</button>` : ""}
+        </div>
       </div>
     </div>
     <div class="tv-season-row">
@@ -706,8 +728,18 @@ function renderDetail() {
 }
 
 function render() {
+  const prevActive = document.activeElement;
+  const wasSearchFocused = !!(prevActive && prevActive.id === "searchInput");
+  const cursorPos = wasSearchFocused ? prevActive.selectionStart : null;
   document.getElementById("app").innerHTML = renderHeader() + renderMain();
   bindEvents();
+  if (wasSearchFocused) {
+    const searchInput = document.getElementById("searchInput");
+    if (searchInput) {
+      searchInput.focus({ preventScroll: true });
+      searchInput.setSelectionRange(cursorPos, cursorPos);
+    }
+  }
 }
 
 function bindEvents() {
@@ -740,8 +772,6 @@ function bindEvents() {
   const searchInput = document.getElementById("searchInput");
   if (searchInput) {
     searchInput.oninput = (e) => { state.query = e.target.value; runSearch(); };
-    searchInput.focus();
-    searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
   }
   const clearSearchBtn = document.getElementById("clearSearchBtn");
   if (clearSearchBtn) clearSearchBtn.onclick = () => { state.query = ""; state.results = null; render(); };
@@ -783,6 +813,8 @@ function bindEvents() {
   if (backBtn) backBtn.onclick = () => { state.detail = null; render(); };
   const toggleWatchBtn = document.getElementById("toggleWatchBtn");
   if (toggleWatchBtn) toggleWatchBtn.onclick = () => isWatching(state.detail.id) ? removeFromWatching(state.detail.id) : addToWatching(state.detail);
+  const completeSeriesBtn = document.getElementById("completeSeriesBtn");
+  if (completeSeriesBtn) completeSeriesBtn.onclick = () => completeSeries(state.detail.id);
   const seasonSelect = document.getElementById("seasonSelect");
   if (seasonSelect) seasonSelect.onchange = (e) => { state.season = Number(e.target.value); loadSeason(); };
   const markSeasonBtn = document.getElementById("markSeasonBtn");
