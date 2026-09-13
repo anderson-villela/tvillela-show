@@ -140,8 +140,9 @@
   .tv-badge-label { font-size: 11.5px; color: var(--text-muted); line-height: 1.3; }
 
   .tv-static-poster { border-radius: 8px; overflow: hidden; background: var(--surface); }
+  .tv-divider { border: none; border-top: 1px solid var(--border); margin: 30px 0 0; }
 
-  .tv-status-note { margin-top: 16px; padding: 12px 16px; border-radius: 9px; font-size: 13.5px; line-height: 1.5; }
+  .tv-status-note { margin-top: 16px; margin-bottom: 16px; padding: 12px 16px; border-radius: 9px; font-size: 13.5px; line-height: 1.5; }
   .tv-status-ended { background: rgba(242,193,78,.12); border: 1px solid rgba(242,193,78,.35); color: var(--accent-2); }
   .tv-status-returning { background: rgba(255,75,62,.10); border: 1px solid rgba(255,75,62,.3); color: #ff9a90; }
 
@@ -344,8 +345,13 @@ async function loadWatchProviders(seriesId) {
 async function loadSimilarShows(seriesId) {
   state.similarLoading = true; render();
   try {
-    const d = await tmdb(`/tv/${seriesId}/similar`);
-    state.similarShows = (d.results || []).slice(0, 12);
+    const rec = await tmdb(`/tv/${seriesId}/recommendations`);
+    let results = rec.results || [];
+    if (results.length === 0) {
+      const sim = await tmdb(`/tv/${seriesId}/similar`);
+      results = sim.results || [];
+    }
+    state.similarShows = results.slice(0, 12);
   } catch (e) {
     state.similarShows = [];
   }
@@ -897,6 +903,7 @@ function renderSimilarShows(d) {
       <div class="tv-card-title" data-open="${s.id}">${esc(s.name)}</div>
     </div>`).join("");
   return `
+    <hr class="tv-divider">
     <h3 class="tv-section-title">Se você gostou de "${esc(d.name)}", você também vai gostar de:</h3>
     ${state.similarLoading
       ? `<div class="tv-empty">Buscando sugestões…</div>`
