@@ -90,6 +90,11 @@
   .tv-detail-poster { width: 130px; border-radius: 9px; flex-shrink: 0; }
   .tv-detail-title { font-size: 25px; font-weight: 800; margin: 0 0 8px; letter-spacing: -0.01em; }
   .tv-detail-overview { font-size: 14px; color: var(--text-muted); line-height: 1.55; margin: 0 0 14px; max-width: 60ch; }
+  .tv-detail-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; color: var(--text-muted); margin-bottom: 10px; }
+  .tv-providers { margin-bottom: 16px; }
+  .tv-providers-label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+  .tv-providers-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+  .tv-provider-logo { width: 38px; height: 38px; border-radius: 9px; object-fit: cover; }
   .tv-season-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
   .tv-select-wrap { position: relative; }
   .tv-select { appearance: none; padding-right: 30px; cursor: pointer; }
@@ -210,6 +215,8 @@ const state = {
   resultsPage: 0, resultsTotalPages: 1,
   emBreve: null,
   emBreveLoading: false,
+  watchProviders: null,
+  watchProvidersLoading: false,
 };
 let searchTimer = null;
 
@@ -270,6 +277,7 @@ async function removeFromWatching(id) {
 
 async function openDetail(show, preferredSeason) {
   state.error = ""; state.detail = null; state.episodes = null; state.loading = true;
+  state.watchProviders = null; state.watchProvidersLoading = false;
   render();
   try {
     const full = await tmdb(`/tv/${show.id}`);
@@ -279,8 +287,27 @@ async function openDetail(show, preferredSeason) {
       (full.seasons || []).find((s) => s.season_number > 0)?.season_number || 1;
     state.season = startSeason;
     await loadSeason();
+    loadWatchProviders(show.id);
   } catch (e) { state.error = e.message; }
   state.loading = false;
+  render();
+}
+
+async function loadWatchProviders(seriesId) {
+  state.watchProvidersLoading = true; render();
+  try {
+    const d = await tmdb(`/tv/${seriesId}/watch/providers`);
+    const region = (d.results && (d.results.BR || d.results.US)) || null;
+    const seen = new Set();
+    const list = [];
+    (region?.flatrate || []).forEach((p) => {
+      if (!seen.has(p.provider_id)) { seen.add(p.provider_id); list.push(p); }
+    });
+    state.watchProviders = list;
+  } catch (e) {
+    state.watchProviders = [];
+  }
+  state.watchProvidersLoading = false;
   render();
 }
 
@@ -776,7 +803,22 @@ function renderDetail() {
       ${d.poster_path ? `<img class="tv-detail-poster" src="${IMG}${d.poster_path}" alt="">` : ""}
       <div>
         <h1 class="tv-detail-title">${esc(d.name)}</h1>
+        <div class="tv-detail-meta">
+          ${(d.genres || []).length ? `<span>${esc(d.genres.map((g) => g.name).join(", "))}</span>` : ""}
+          ${d.vote_average ? `<span>⭐ ${d.vote_average.toFixed(1)}</span>` : ""}
+          <span>Criado por: ${(d.created_by && d.created_by.length) ? esc(d.created_by.map((c) => c.name).join(", ")) : "não informado"}</span>
+        </div>
         <p class="tv-detail-overview">${esc(d.overview) || "Sem sinopse disponível."}</p>
+        <div class="tv-providers">
+          <div class="tv-providers-label">Onde assistir</div>
+          ${state.watchProvidersLoading
+            ? `<div class="tv-hint">Verificando plataformas…</div>`
+            : (state.watchProviders && state.watchProviders.length
+                ? `<div class="tv-providers-row">${state.watchProviders.map((p) => `
+                    <img class="tv-provider-logo" src="${IMG.replace("w342","w92")}${p.logo_path}" alt="${esc(p.provider_name)}" title="${esc(p.provider_name)}">
+                  `).join("")}</div><p class="tv-hint">Dados de streaming via JustWatch, por região.</p>`
+                : `<p class="tv-hint">Não encontrado em nenhum serviço de streaming por assinatura no momento.</p>`)}
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="tv-btn ${isWatching(d.id) ? "tv-btn-ghost" : "tv-btn-primary"}" id="toggleWatchBtn">
             ${isWatching(d.id) ? "Remover da Minha Lista" : "Adicionar à Minha Lista"}
